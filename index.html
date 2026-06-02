@@ -31,9 +31,9 @@ body { background: #000; display: flex; flex-direction: column; align-items: cen
 </div>
 
 <script>
-const CELL = 48;
 const COLS = 13;
 const ROWS = 13;
+let CELL = Math.min(48, Math.floor(Math.min(window.innerWidth, window.innerHeight * 0.85) / COLS));
 
 // 0=corridoio, 1=muro, 2=calzino
 const MAP_TEMPLATE = [
@@ -378,6 +378,14 @@ startBtn.onclick = function() {
   cancelAnimationFrame(animFrame);
   animFrame = requestAnimationFrame(gameLoop2);
 };
+
+function resizeCanvas() {
+  CELL = Math.min(48, Math.floor(Math.min(window.innerWidth, window.innerHeight * 0.85) / COLS));
+  canvas.width  = COLS * CELL;
+  canvas.height = ROWS * CELL;
+  draw();
+}
+window.addEventListener('resize', resizeCanvas);
 
 // Disegna schermata iniziale statica
 loadImages();
