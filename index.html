@@ -2,421 +2,388 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Salva i Calzini!</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salva Pino!</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { background: #000; width: 100%; height: 100%; overflow: hidden; }
-  body { display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Courier New', monospace; }
-  #hud { color: #fff; font-size: 18px; padding: 6px 0 8px; display: flex; gap: 40px; flex-shrink: 0; }
-  canvas#c { display: block; border: 2px solid #00f; flex-shrink: 0; }
-  #joystick-area { display: none; flex-shrink: 0; padding: 12px 0 4px; touch-action: none; user-select: none; }
-  #overlay {
-    display: none; position: fixed; top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0,0,0,0.92); color: #fff;
-    text-align: center; padding: 28px 36px;
-    border: 3px solid #ff0; border-radius: 12px; z-index: 10;
-  }
-  #overlay h1 { font-size: clamp(20px, 5vw, 32px); margin-bottom: 10px; }
-  #overlay p  { font-size: clamp(16px, 4vw, 22px); color: #ff0; margin-bottom: 4px; }
-  #overlay button {
-    margin-top: 16px; padding: 12px 30px;
-    font-size: clamp(15px, 4vw, 18px); cursor: pointer;
-    background: #ff0; border: none; border-radius: 6px; font-weight: bold;
-  }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Courier New', monospace; color: #fff; }
+#hud { font-size: 22px; margin-bottom: 10px; letter-spacing: 2px; }
+#canvas { border: 3px solid #00f; display: block; }
+#overlay { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+#msg { font-size: 36px; font-weight: bold; text-align: center; text-shadow: 0 0 10px currentColor; }
+#startBtn {
+  font-size: 22px; padding: 14px 40px; background: #00f; color: #fff;
+  border: none; border-radius: 8px; cursor: pointer; letter-spacing: 2px;
+  font-family: 'Courier New', monospace;
+}
+#startBtn:hover { background: #33f; }
+#wrap { position: relative; display: flex; align-items: center; justify-content: center; }
 </style>
 </head>
 <body>
-
-<div id="hud">
-  <span>Punteggio: <span id="score">0</span></span>
-  <span>Calzini: <span id="socks">0</span></span>
-</div>
-<canvas id="c"></canvas>
-<div id="joystick-area">
-  <canvas id="jc" width="160" height="160"></canvas>
-</div>
-<div id="overlay">
-  <h1 id="msg"></h1>
-  <p id="final-score"></p>
-  <button onclick="startGame()">Gioca ancora</button>
+<div id="hud">Punteggio: <span id="score">0</span> &nbsp;&nbsp; Calzini: <span id="socks">0</span></div>
+<div id="wrap">
+  <canvas id="canvas"></canvas>
+  <div id="overlay">
+    <div id="msg">👟 SALVA PINO! 👟</div>
+    <button id="startBtn">▶ INIZIA</button>
+  </div>
 </div>
 
 <script>
-// ── Costanti griglia ─────────────────────────────────────────────────────────
-const COLS = 11;
-const ROWS = 11;
+const CELL = 48;
+const COLS = 13;
+const ROWS = 13;
 
-// ── Rileva mobile ────────────────────────────────────────────────────────────
-const isMobile = window.innerWidth <= 900 || navigator.maxTouchPoints > 0;
-
-// ── Calcola dimensione cella ─────────────────────────────────────────────────
-(function() {
-  const hudH  = 44;
-  const joyH  = isMobile ? 188 : 0;
-  const pad   = 20;
-  const maxW  = window.innerWidth  - pad;
-  const maxH  = window.innerHeight - hudH - joyH - pad;
-  window.TILE = Math.min(80, Math.floor(Math.min(maxW, maxH) / COLS));
-})();
-
-// ── Canvas principale ────────────────────────────────────────────────────────
-const canvas = document.getElementById('c');
-const ctx    = canvas.getContext('2d');
-canvas.width  = COLS * TILE;
-canvas.height = ROWS * TILE;
-
-// ── Mappa ─────────────────────────────────────────────────────────────────────
-// 1=muro  0=calzino  2=vuoto  3=porta fantasma
+// 0=corridoio, 1=muro, 2=calzino
 const MAP_TEMPLATE = [
-  [1,1,1,1,1,1,1,1,1,1,1],
-  [1,0,0,0,0,0,0,0,0,0,1],
-  [1,0,1,0,1,1,1,0,1,0,1],
-  [1,0,0,0,0,2,0,0,0,0,1],
-  [1,0,1,0,1,3,1,0,1,0,1],
-  [1,0,0,0,0,0,0,0,0,0,1],
-  [1,0,1,0,1,0,1,0,1,0,1],
-  [1,0,0,0,0,1,0,0,0,0,1],
-  [1,0,1,0,1,0,1,0,1,0,1],
-  [1,0,0,0,0,0,0,0,0,0,1],
-  [1,1,1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,2,2,2,2,2,1,2,2,2,2,2,1],
+  [1,2,1,1,2,1,1,1,2,1,1,2,1],
+  [1,2,1,1,2,2,2,2,2,1,1,2,1],
+  [1,2,2,2,2,1,1,1,2,2,2,2,1],
+  [1,1,1,2,1,1,0,1,1,2,1,1,1],
+  [1,2,2,2,2,0,0,0,2,2,2,2,1],
+  [1,1,1,2,1,1,0,1,1,2,1,1,1],
+  [1,2,2,2,2,1,1,1,2,2,2,2,1],
+  [1,2,1,1,2,2,2,2,2,1,1,2,1],
+  [1,2,1,1,2,1,1,1,2,1,1,2,1],
+  [1,2,2,2,2,2,1,2,2,2,2,2,1],
+  [1,1,1,1,1,1,1,1,1,1,1,1,1],
 ];
 
-// ── Immagini ──────────────────────────────────────────────────────────────────
-const imgPinoChiusa = new Image(); imgPinoChiusa.src = 'pino-chiusa.png';
-const imgPinoAperta = new Image(); imgPinoAperta.src = 'pino-aperta.png';
-const imgTeresa     = new Image(); imgTeresa.src     = 'teresa.png';
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = COLS * CELL;
+canvas.height = ROWS * CELL;
 
-// ── Stato di gioco ────────────────────────────────────────────────────────────
-let map, pino, teresa, score, totalSocks, gameRunning, animFrame, lastTime;
-let nextDir = null;
+const scoreEl = document.getElementById('score');
+const socksEl = document.getElementById('socks');
+const overlay = document.getElementById('overlay');
+const msg = document.getElementById('msg');
+const startBtn = document.getElementById('startBtn');
 
-function deepCopyMap() { return MAP_TEMPLATE.map(r => [...r]); }
-function countSocks(m) {
-  let n = 0;
-  for (const r of m) for (const c of r) if (c === 0) n++;
-  return n;
+let map, pino, teresa, dir, nextDir, score, totalSocks, gameRunning, animFrame;
+let imgPinoOpen, imgPinoClose, imgTeresa, imgsLoaded = 0;
+
+function loadImages() {
+  imgPinoOpen = new Image(); imgPinoOpen.src = 'pino-aperta.png';
+  imgPinoClose = new Image(); imgPinoClose.src = 'pino-chiusa.png';
+  imgTeresa = new Image(); imgTeresa.src = 'teresa.png';
+  [imgPinoOpen, imgPinoClose, imgTeresa].forEach(img => {
+    img.onload = () => { imgsLoaded++; };
+    img.onerror = () => { imgsLoaded++; };
+  });
 }
 
-function startGame() {
-  document.getElementById('overlay').style.display = 'none';
-  map        = deepCopyMap();
-  totalSocks = countSocks(map);
-  score      = 0;
-  nextDir    = null;
-  document.getElementById('score').textContent = 0;
-  document.getElementById('socks').textContent = totalSocks;
-
-  pino = {
-    x: 5.5, y: 9.5,
-    dx: 0, dy: 0,
-    mouthOpen: false, mouthTimer: 0,
-    speed: 5, moving: false
-  };
-  teresa = {
-    x: 5.5, y: 1.5,
-    dx: 1, dy: 0,
-    speed: 3.5
-  };
-
-  gameRunning = true;
-  if (animFrame) cancelAnimationFrame(animFrame);
-  lastTime   = null;
-  animFrame  = requestAnimationFrame(loop);
+function initGame() {
+  map = MAP_TEMPLATE.map(r => [...r]);
+  totalSocks = 0;
+  map.forEach(r => r.forEach(c => { if (c === 2) totalSocks++; }));
+  score = 0;
+  scoreEl.textContent = score;
+  socksEl.textContent = totalSocks;
+  // Pino parte in basso al centro
+  pino = { x: 6, y: 11, dx: 0, dy: 0, mouthOpen: false, tick: 0 };
+  // Teresa parte in alto a destra
+  teresa = { x: 9, y: 1, dx: 0, dy: 0, stuck: 0 };
+  dir = { dx: 0, dy: 0 };
+  nextDir = { dx: 0, dy: 0 };
 }
 
-// ── Game loop ─────────────────────────────────────────────────────────────────
-function loop(ts) {
-  if (!gameRunning) return;
-  if (!lastTime) lastTime = ts;
-  const dt = Math.min((ts - lastTime) / 1000, 0.05);
-  lastTime = ts;
-  update(dt);
-  draw();
-  animFrame = requestAnimationFrame(loop);
+function canMove(x, y) {
+  if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
+  return map[y][x] !== 1;
 }
 
-// ── Collisioni ────────────────────────────────────────────────────────────────
-function canMove(tx, ty) {
-  const m = 0.2;
-  for (const [cx, cy] of [
-    [tx + m,   ty + m  ],
-    [tx+1-m,   ty + m  ],
-    [tx + m,   ty+1-m  ],
-    [tx+1-m,   ty+1-m  ],
-  ]) {
-    const col = Math.floor(cx), row = Math.floor(cy);
-    if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return false;
-    const cell = map[row][col];
-    if (cell === 1 || cell === 3) return false;
-  }
-  return true;
-}
+let lastTime = 0;
+const PINO_SPEED = 180;
+const TERESA_SPEED = 240;
+let pinoTimer = 0;
+let teresaTimer = 0;
 
-function wrapX(x) {
-  if (x < -1) return COLS - 1;
-  if (x >= COLS) return 0;
-  return x;
-}
+function moveTeresa(dt) {
+  teresaTimer += dt;
+  if (teresaTimer < TERESA_SPEED) return;
+  teresaTimer = 0;
 
-// ── Update ────────────────────────────────────────────────────────────────────
-function update(dt) {
   const px = pino.x, py = pino.y;
-  const cx = Math.round(px), cy = Math.round(py);
+  const tx = teresa.x, ty = teresa.y;
 
-  // Applica direzione richiesta se vicino al centro del tile
-  if (nextDir) {
-    if (Math.abs(px - cx) + Math.abs(py - cy) < 0.15) {
-      if (canMove(cx - 0.5 + nextDir.x, cy - 0.5 + nextDir.y)) {
-        pino.dx = nextDir.x;
-        pino.dy = nextDir.y;
-        pino.x  = cx;
-        pino.y  = cy;
-      }
+  // Tutte le 4 direzioni possibili
+  const dirs = [
+    { dx: 1, dy: 0 }, { dx: -1, dy: 0 },
+    { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
+  ];
+
+  // Filtra direzioni percorribili (escludi direzione opposta a quella attuale se non è bloccata)
+  const possible = dirs.filter(d => canMove(tx + d.dx, ty + d.dy));
+
+  if (possible.length === 0) return;
+
+  // Scegli la direzione che avvicina di più a Pino
+  // Con un po' di randomicità per non restare bloccata
+  teresa.stuck++;
+
+  let chosen;
+  if (teresa.stuck > 3) {
+    // Ogni 3 mosse forza una direzione casuale tra quelle libere
+    teresa.stuck = 0;
+    chosen = possible[Math.floor(Math.random() * possible.length)];
+  } else {
+    // Avvicinati a Pino
+    possible.sort((a, b) => {
+      const da = Math.abs(tx + a.dx - px) + Math.abs(ty + a.dy - py);
+      const db = Math.abs(tx + b.dx - px) + Math.abs(ty + b.dy - py);
+      return da - db;
+    });
+    chosen = possible[0];
+  }
+
+  teresa.x += chosen.dx;
+  teresa.y += chosen.dy;
+  teresa.dx = chosen.dx;
+  teresa.dy = chosen.dy;
+}
+
+function movePino(dt) {
+  pinoTimer += dt;
+  if (pinoTimer < PINO_SPEED) return;
+  pinoTimer = 0;
+
+  // Prova nextDir prima, poi dir attuale
+  if (nextDir.dx !== 0 || nextDir.dy !== 0) {
+    const nx = pino.x + nextDir.dx;
+    const ny = pino.y + nextDir.dy;
+    if (canMove(nx, ny)) {
+      dir = { ...nextDir };
     }
   }
 
-  // Muovi Pino
-  const step = pino.speed * dt;
-  const newX = wrapX(pino.x + pino.dx * step);
-  const newY = pino.y + pino.dy * step;
-  if (pino.dx !== 0 || pino.dy !== 0) {
-    if (canMove(newX - 0.5, newY - 0.5)) {
-      pino.x = newX; pino.y = newY; pino.moving = true;
-    } else {
-      pino.x = Math.round(pino.x); pino.y = Math.round(pino.y); pino.moving = false;
-    }
-  } else { pino.moving = false; }
-
-  // Animazione bocca
-  if (pino.moving) {
-    pino.mouthTimer += dt;
-    if (pino.mouthTimer >= 0.2) { pino.mouthTimer = 0; pino.mouthOpen = !pino.mouthOpen; }
-  } else { pino.mouthOpen = false; }
+  const nx = pino.x + dir.dx;
+  const ny = pino.y + dir.dy;
+  if (canMove(nx, ny)) {
+    pino.x = nx;
+    pino.y = ny;
+    pino.mouthOpen = !pino.mouthOpen;
+  }
 
   // Mangia calzino
-  const pc = Math.round(pino.x), pr = Math.round(pino.y);
-  if (pr >= 0 && pr < ROWS && pc >= 0 && pc < COLS && map[pr][pc] === 0) {
-    map[pr][pc] = 2;
-    score += 10; totalSocks--;
-    document.getElementById('score').textContent = score;
-    document.getElementById('socks').textContent = totalSocks;
-    if (totalSocks <= 0) { endGame(true); return; }
+  if (map[pino.y][pino.x] === 2) {
+    map[pino.y][pino.x] = 0;
+    score += 10;
+    totalSocks--;
+    scoreEl.textContent = score;
+    socksEl.textContent = totalSocks;
   }
-
-  updateTeresa(dt);
-
-  if (Math.hypot(pino.x - teresa.x, pino.y - teresa.y) < 0.9) endGame(false);
 }
 
-// ── AI Teresa ─────────────────────────────────────────────────────────────────
-function updateTeresa(dt) {
-  const step = teresa.speed * dt;
-  const tc = Math.round(teresa.x), tr = Math.round(teresa.y);
+function checkCollision() {
+  return pino.x === teresa.x && pino.y === teresa.y;
+}
 
-  if (Math.abs(teresa.x - tc) + Math.abs(teresa.y - tr) < step + 0.05) {
-    teresa.x = tc; teresa.y = tr;
-
-    const pc = Math.round(pino.x), pr = Math.round(pino.y);
-    const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-
-    const free = dirs.filter(d => {
-      const nc = tc + d.x, nr = tr + d.y;
-      if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return false;
-      return map[nr][nc] !== 1 && map[nr][nc] !== 3;
-    });
-
-    const curD = Math.hypot(tc - pc, tr - pr);
-    const closer = free.filter(d => Math.hypot(tc + d.x - pc, tr + d.y - pr) < curD);
-    const pool   = closer.length > 0 ? closer : free;
-    if (pool.length > 0) {
-      const ch = pool[Math.floor(Math.random() * pool.length)];
-      teresa.dx = ch.x; teresa.dy = ch.y;
+function drawCell(x, y) {
+  const c = map[y][x];
+  const px = x * CELL, py = y * CELL;
+  if (c === 1) {
+    ctx.fillStyle = '#0000cc';
+    ctx.fillRect(px, py, CELL, CELL);
+    ctx.strokeStyle = '#3333ff';
+    ctx.strokeRect(px + 1, py + 1, CELL - 2, CELL - 2);
+  } else {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(px, py, CELL, CELL);
+    if (c === 2) {
+      ctx.font = `${CELL * 0.6}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🧦', px + CELL / 2, py + CELL / 2);
     }
   }
+}
 
-  const nX = wrapX(teresa.x + teresa.dx * step);
-  const nY = teresa.y + teresa.dy * step;
-  if (canMove(nX - 0.5, nY - 0.5)) {
-    teresa.x = nX; teresa.y = nY;
+function drawCharacter(img, fallbackColor, fallbackChar, x, y) {
+  const px = x * CELL + 2, py = y * CELL + 2;
+  const size = CELL - 4;
+  if (img && img.complete && img.naturalWidth > 0) {
+    ctx.drawImage(img, px, py, size, size);
   } else {
-    teresa.x = tc; teresa.y = tr;
+    ctx.fillStyle = fallbackColor;
+    ctx.beginPath();
+    ctx.arc(px + size/2, py + size/2, size/2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = `${size * 0.6}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(fallbackChar, px + size/2, py + size/2);
   }
-}
-
-function endGame(win) {
-  gameRunning = false;
-  document.getElementById('msg').textContent        = win ? '🧦 Hai salvato tutti i calzini!' : '😱 Teresa ti ha preso!';
-  document.getElementById('final-score').textContent = 'Punteggio: ' + score;
-  document.getElementById('overlay').style.display  = 'block';
-}
-
-// ── Disegno ───────────────────────────────────────────────────────────────────
-function drawSock(x, y) {
-  ctx.font         = Math.max(14, Math.round(TILE * 0.52)) + 'px serif';
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('🧦', x, y);
 }
 
 function draw() {
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < ROWS; y++)
+    for (let x = 0; x < COLS; x++)
+      drawCell(x, y);
 
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const cell = map[r][c];
-      const px = c * TILE, py = r * TILE;
-      if (cell === 1) {
-        ctx.fillStyle = '#00f';
-        ctx.fillRect(px, py, TILE, TILE);
-        ctx.strokeStyle = '#44f'; ctx.lineWidth = 1;
-        ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
-      } else if (cell === 0) {
-        drawSock(px + TILE / 2, py + TILE / 2);
-      }
-    }
-  }
-
-  // Pino
-  const pinoImg  = pino.mouthOpen ? imgPinoAperta : imgPinoChiusa;
-  const psx      = pino.x * TILE - TILE / 2;
-  const psy      = pino.y * TILE - TILE / 2;
-  ctx.save();
-  ctx.translate(psx + TILE / 2, psy + TILE / 2);
-  let angle = 0;
-  if      (pino.dx ===  1) angle = 0;
-  else if (pino.dx === -1) angle = Math.PI;
-  else if (pino.dy === -1) angle = -Math.PI / 2;
-  else if (pino.dy ===  1) angle =  Math.PI / 2;
-  ctx.rotate(angle);
-  if (pinoImg.complete && pinoImg.naturalWidth > 0) {
-    ctx.drawImage(pinoImg, -TILE / 2, -TILE / 2, TILE, TILE);
-  } else {
-    ctx.fillStyle = '#ff0';
-    ctx.beginPath();
-    ctx.arc(0, 0, TILE / 2 - 1, 0.25, Math.PI * 2 - 0.25);
-    ctx.lineTo(0, 0);
-    ctx.fill();
-  }
-  ctx.restore();
-
-  // Teresa
-  const tsx = teresa.x * TILE - TILE / 2;
-  const tsy = teresa.y * TILE - TILE / 2;
-  if (imgTeresa.complete && imgTeresa.naturalWidth > 0) {
-    ctx.drawImage(imgTeresa, tsx, tsy, TILE, TILE);
-  } else {
-    const tx = teresa.x * TILE, ty = teresa.y * TILE, R = TILE / 2 - 1;
-    ctx.fillStyle = '#f00';
-    ctx.beginPath();
-    ctx.arc(tx, ty, R, Math.PI, 0);
-    ctx.lineTo(tx + R, ty + R - 2);
-    for (let i = 4; i >= 0; i--) {
-      ctx.lineTo((tx - R + 1) + ((TILE - 2) / 4) * i, ty + R - 2 - (i % 2 === 0 ? 4 : 0));
-    }
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(tx - 4, ty - 2, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(tx + 4, ty - 2, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#00f';
-    ctx.beginPath(); ctx.arc(tx - 4 + teresa.dx, ty - 2 + teresa.dy, 1.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(tx + 4 + teresa.dx, ty - 2 + teresa.dy, 1.5, 0, Math.PI * 2); ctx.fill();
-  }
+  const pinoImg = pino.mouthOpen ? imgPinoOpen : imgPinoClose;
+  drawCharacter(pinoImg, '#ffff00', '😮', pino.x, pino.y);
+  drawCharacter(imgTeresa, '#ff00ff', '👠', teresa.x, teresa.y);
 }
 
-// ── Input tastiera ────────────────────────────────────────────────────────────
+function gameLoop(ts) {
+  if (!gameRunning) return;
+  const dt = ts - lastTime;
+  lastTime = ts;
+
+  movePino(dt);
+  moveTeresa(dt);
+  draw();
+
+  if (checkCollision()) {
+    gameRunning = false;
+    showOverlay('😱 Teresa ti ha preso!', '#ff4444', 'RIPROVA');
+    return;
+  }
+  if (totalSocks === 0) {
+    gameRunning = false;
+    showOverlay('🎉 Hai salvato tutti i calzini!', '#44ff44', 'ANCORA');
+    return;
+  }
+
+  animFrame = requestAnimationFrame(gameLoop);
+}
+
+function showOverlay(text, color, btnText) {
+  msg.textContent = text;
+  msg.style.color = color;
+  startBtn.textContent = '▶ ' + btnText;
+  overlay.style.display = 'flex';
+}
+
+function startGame() {
+  overlay.style.display = 'none';
+  initGame();
+  gameRunning = true;
+  lastTime = performance.now();
+  pinoTimer = 0;
+  teresaTimer = 0;
+  cancelAnimationFrame(animFrame);
+  animFrame = requestAnimationFrame(gameLoop);
+}
+
+startBtn.addEventListener('click', startGame);
+
+// CONTROLLI TASTIERA
 window.addEventListener('keydown', function(e) {
-  e.preventDefault();
-  if (e.key === 'ArrowUp'    || e.key === 'w' || e.key === 'W') nextDir = {x: 0, y:-1};
-  if (e.key === 'ArrowDown'  || e.key === 's' || e.key === 'S') nextDir = {x: 0, y: 1};
-  if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') nextDir = {x:-1, y: 0};
-  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') nextDir = {x: 1, y: 0};
+  if (!gameRunning) return;
+  switch(e.key) {
+    case 'ArrowUp':    case 'w': case 'W': nextDir = {dx:0,  dy:-1}; e.preventDefault(); break;
+    case 'ArrowDown':  case 's': case 'S': nextDir = {dx:0,  dy:1};  e.preventDefault(); break;
+    case 'ArrowLeft':  case 'a': case 'A': nextDir = {dx:-1, dy:0};  e.preventDefault(); break;
+    case 'ArrowRight': case 'd': case 'D': nextDir = {dx:1,  dy:0};  e.preventDefault(); break;
+  }
 });
 
-// ── Joystick virtuale ─────────────────────────────────────────────────────────
-const joyCanvas = document.getElementById('jc');
-const joyCtx    = joyCanvas.getContext('2d');
-const JR  = 60;   // raggio esterno
-const JIR = 24;   // raggio interno
-const JCX = 80, JCY = 80;
-let joyPos    = {x: JCX, y: JCY};
-let joyActive = false;
+// JOYSTICK MOBILE
+const jRadius = 55, jInner = 22;
+let jActive = false, jCX = 0, jCY = 0, jFX = 0, jFY = 0;
+let showJoystick = false;
 
-function drawJoystick() {
-  joyCtx.clearRect(0, 0, 160, 160);
-  // Cerchio esterno
-  joyCtx.beginPath();
-  joyCtx.arc(JCX, JCY, JR, 0, Math.PI * 2);
-  joyCtx.fillStyle   = 'rgba(255,255,255,0.07)';
-  joyCtx.fill();
-  joyCtx.strokeStyle = 'rgba(255,255,255,0.45)';
-  joyCtx.lineWidth   = 3;
-  joyCtx.stroke();
-  // Indicatori direzionali
-  joyCtx.fillStyle = 'rgba(255,255,255,0.22)';
-  for (const [ox, oy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-    joyCtx.beginPath();
-    joyCtx.arc(JCX + ox * 42, JCY + oy * 42, 9, 0, Math.PI * 2);
-    joyCtx.fill();
-  }
-  // Cerchio interno
-  joyCtx.beginPath();
-  joyCtx.arc(joyPos.x, joyPos.y, JIR, 0, Math.PI * 2);
-  joyCtx.fillStyle = 'rgba(255,255,255,0.75)';
-  joyCtx.fill();
-}
+canvas.addEventListener('touchstart', function(e) {
+  e.preventDefault();
+  showJoystick = true;
+  const t = e.touches[0];
+  const r = canvas.getBoundingClientRect();
+  jCX = t.clientX - r.left;
+  jCY = t.clientY - r.top;
+  jFX = jCX; jFY = jCY;
+  jActive = true;
+}, {passive: false});
 
-function applyJoyInput(clientX, clientY) {
-  const rect = joyCanvas.getBoundingClientRect();
-  const dx   = clientX - (rect.left + JCX);
-  const dy   = clientY - (rect.top  + JCY);
-  const dist = Math.hypot(dx, dy);
-  const clamp = Math.min(dist, JR);
-  const angle = Math.atan2(dy, dx);
-  joyPos.x = JCX + Math.cos(angle) * clamp;
-  joyPos.y = JCY + Math.sin(angle) * clamp;
-  if (dist > 18) {
-    const deg = angle * 180 / Math.PI;
-    if      (deg > -45  && deg <=  45) nextDir = {x: 1, y: 0};
-    else if (deg >  45  && deg <= 135) nextDir = {x: 0, y: 1};
-    else if (deg >  135 || deg <= -135) nextDir = {x:-1, y: 0};
-    else                                nextDir = {x: 0, y:-1};
-  }
-  drawJoystick();
-}
-
-if (isMobile) {
-  document.getElementById('joystick-area').style.display = 'block';
-
-  document.addEventListener('touchstart', function(e) {
-    const rect = joyCanvas.getBoundingClientRect();
-    const t    = e.touches[0];
-    if (Math.hypot(t.clientX - (rect.left + JCX), t.clientY - (rect.top + JCY)) <= JR + 24) {
-      joyActive = true;
-      applyJoyInput(t.clientX, t.clientY);
-      e.preventDefault();
+canvas.addEventListener('touchmove', function(e) {
+  e.preventDefault();
+  if (!jActive) return;
+  const t = e.touches[0];
+  const r = canvas.getBoundingClientRect();
+  jFX = t.clientX - r.left;
+  jFY = t.clientY - r.top;
+  const dx = jFX - jCX, dy = jFY - jCY;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist > 15) {
+    if (Math.abs(dx) > Math.abs(dy)) {
+      nextDir = {dx: dx > 0 ? 1 : -1, dy: 0};
+    } else {
+      nextDir = {dx: 0, dy: dy > 0 ? 1 : -1};
     }
-  }, {passive: false});
+  }
+}, {passive: false});
 
-  document.addEventListener('touchmove', function(e) {
-    if (!joyActive) return;
-    e.preventDefault();
-    applyJoyInput(e.touches[0].clientX, e.touches[0].clientY);
-  }, {passive: false});
+canvas.addEventListener('touchend', function(e) {
+  e.preventDefault();
+  jActive = false;
+  showJoystick = false;
+}, {passive: false});
 
-  document.addEventListener('touchend', function(e) {
-    if (!joyActive) return;
-    e.preventDefault();
-    joyActive = false;
-    joyPos    = {x: JCX, y: JCY};
-    drawJoystick();
-  }, {passive: false});
+// Override draw per joystick
+const origDraw = draw;
+function drawWithJoystick() {
+  origDraw();
+  if (showJoystick && jActive) {
+    const dx = Math.min(Math.max(jFX - jCX, -jRadius), jRadius);
+    const dy = Math.min(Math.max(jFY - jCY, -jRadius), jRadius);
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(jCX, jCY, jRadius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#00f';
+    ctx.beginPath();
+    ctx.arc(jCX + dx, jCY + dy, jInner, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+window.draw = drawWithJoystick;
+
+// Ridefinisci gameLoop per usare draw globale
+function gameLoop2(ts) {
+  if (!gameRunning) return;
+  const dt = ts - lastTime;
+  lastTime = ts;
+  movePino(dt);
+  moveTeresa(dt);
+  window.draw();
+  if (checkCollision()) {
+    gameRunning = false;
+    showOverlay('😱 Teresa ti ha preso!', '#ff4444', 'RIPROVA');
+    return;
+  }
+  if (totalSocks === 0) {
+    gameRunning = false;
+    showOverlay('🎉 Hai salvato tutti i calzini!', '#44ff44', 'ANCORA');
+    return;
+  }
+  animFrame = requestAnimationFrame(gameLoop2);
 }
 
-drawJoystick();
-startGame();
+// Sostituisci startGame per usare gameLoop2
+startBtn.addEventListener('click', function() {}, true);
+startBtn.onclick = function() {
+  overlay.style.display = 'none';
+  initGame();
+  gameRunning = true;
+  lastTime = performance.now();
+  pinoTimer = 0;
+  teresaTimer = 0;
+  cancelAnimationFrame(animFrame);
+  animFrame = requestAnimationFrame(gameLoop2);
+};
+
+// Disegna schermata iniziale statica
+loadImages();
+setTimeout(() => {
+  draw();
+}, 300);
 </script>
 </body>
 </html>
