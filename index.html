@@ -71,7 +71,6 @@ function startGame() {
   pino = {
     x: 5.5, y: 9.5,   // posizione in tile (float per movimento fluido)
     dx: 0, dy: 0,
-    nextDx: 0, nextDy: 0,
     mouthOpen: false,
     mouthTimer: 0,
     speed: 5,          // tile/sec
@@ -81,10 +80,7 @@ function startGame() {
   teresa = {
     x: 5.5, y: 1.5,
     dx: 1, dy: 0,
-    speed: 3.5,
-    stuckTimer: 0,
-    lastX: 5.5,
-    lastY: 1.5
+    speed: 3.5
   };
 
   gameRunning = true;
@@ -137,18 +133,14 @@ function update(dt) {
   const cx = Math.round(px), cy = Math.round(py);
 
   // Prova direzione richiesta
-  if (pino.nextDx !== 0 || pino.nextDy !== 0) {
-    const nx = cx + pino.nextDx;
-    const ny = cy + pino.nextDy;
-    // Snap al centro del tile prima di girare
+  if (nextDir) {
     const distFromCenter = Math.abs(px - cx) + Math.abs(py - cy);
-    if (distFromCenter < 0.15 && canMove(cx + pino.nextDx - 0.5 + 0.5, cy + pino.nextDy - 0.5 + 0.5)) {
-      // Verifica movimento nella nuova direzione dal tile corrente
-      const testX = cx - 0.5 + pino.nextDx;
-      const testY = cy - 0.5 + pino.nextDy;
+    if (distFromCenter < 0.15) {
+      const testX = cx - 0.5 + nextDir.x;
+      const testY = cy - 0.5 + nextDir.y;
       if (canMove(testX, testY)) {
-        pino.dx = pino.nextDx;
-        pino.dy = pino.nextDy;
+        pino.dx = nextDir.x;
+        pino.dy = nextDir.y;
         pino.x = cx;
         pino.y = cy;
       }
@@ -248,34 +240,31 @@ function updateTeresa(dt) {
   const step = teresa.speed * dt;
   const tc = Math.round(teresa.x);
   const tr = Math.round(teresa.y);
-  const pc = Math.round(pino.x);
-  const pr = Math.round(pino.y);
 
-  // Stuck detection: se la posizione non cambia abbastanza in 0.4s, forza direzione casuale
-  teresa.stuckTimer += dt;
-  if (teresa.stuckTimer >= 0.4) {
-    if (Math.hypot(teresa.x - teresa.lastX, teresa.y - teresa.lastY) < 0.2) {
-      const neighbors = getNeighbors(tc, tr);
-      if (neighbors.length > 0) {
-        const n = neighbors[Math.floor(Math.random() * neighbors.length)];
-        teresa.dx = n[2];
-        teresa.dy = n[3];
-      }
-    }
-    teresa.lastX = teresa.x;
-    teresa.lastY = teresa.y;
-    teresa.stuckTimer = 0;
-  }
-
-  // Ricalcola direzione BFS quando vicina al centro di un tile
+  // Al centro del tile: scegli la direzione greedy che avvicina a Pino
   const distFromCenter = Math.abs(teresa.x - tc) + Math.abs(teresa.y - tr);
   if (distFromCenter < step + 0.05) {
     teresa.x = tc;
     teresa.y = tr;
-    const dir = bfsDirection(tc, tr, pc, pr);
-    if (dir) {
-      teresa.dx = dir[0];
-      teresa.dy = dir[1];
+
+    const pc = Math.round(pino.x);
+    const pr = Math.round(pino.y);
+    const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+
+    const free = dirs.filter(d => {
+      const nc = tc + d.x, nr = tr + d.y;
+      if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return false;
+      return map[nr][nc] !== 1 && map[nr][nc] !== 3;
+    });
+
+    const curDist = Math.hypot(tc - pc, tr - pr);
+    const closer = free.filter(d => Math.hypot((tc + d.x) - pc, (tr + d.y) - pr) < curDist);
+
+    const pool = closer.length > 0 ? closer : free;
+    if (pool.length > 0) {
+      const chosen = pool[Math.floor(Math.random() * pool.length)];
+      teresa.dx = chosen.x;
+      teresa.dy = chosen.y;
     }
   }
 
@@ -285,16 +274,8 @@ function updateTeresa(dt) {
     teresa.x = newX;
     teresa.y = newY;
   } else {
-    // Muro davanti: snap e scegli direzione alternativa valida (non quella inversa)
     teresa.x = tc;
     teresa.y = tr;
-    const neighbors = getNeighbors(tc, tr).filter(n => n[2] !== -teresa.dx || n[3] !== -teresa.dy);
-    const pool = neighbors.length > 0 ? neighbors : getNeighbors(tc, tr);
-    if (pool.length > 0) {
-      const n = pool[Math.floor(Math.random() * pool.length)];
-      teresa.dx = n[2];
-      teresa.dy = n[3];
-    }
   }
 }
 
@@ -390,15 +371,13 @@ function draw() {
 }
 
 // Input
-const keys = {};
-window.addEventListener('keydown', e => {
-  keys[e.key] = true;
-  switch(e.key) {
-    case 'ArrowLeft':  case 'a': case 'A': pino.nextDx = -1; pino.nextDy = 0; e.preventDefault(); break;
-    case 'ArrowRight': case 'd': case 'D': pino.nextDx =  1; pino.nextDy = 0; e.preventDefault(); break;
-    case 'ArrowUp':    case 'w': case 'W': pino.nextDx =  0; pino.nextDy = -1; e.preventDefault(); break;
-    case 'ArrowDown':  case 's': case 'S': pino.nextDx =  0; pino.nextDy =  1; e.preventDefault(); break;
-  }
+let nextDir = null;
+window.addEventListener('keydown', function(e) {
+  e.preventDefault();
+  if (e.key === 'ArrowUp'    || e.key === 'w' || e.key === 'W') nextDir = {x:0,  y:-1};
+  if (e.key === 'ArrowDown'  || e.key === 's' || e.key === 'S') nextDir = {x:0,  y:1};
+  if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') nextDir = {x:-1, y:0};
+  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') nextDir = {x:1,  y:0};
 });
 
 startGame();
