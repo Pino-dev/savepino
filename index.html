@@ -37,25 +37,21 @@ body { background: #000; display: flex; flex-direction: column; align-items: cen
 </div>
 
 <script>
-const COLS = 13;
-const ROWS = 13;
-let CELL = Math.min(48, Math.floor(Math.min(window.innerWidth, window.innerHeight * 0.85) / COLS));
+const COLS = 9;
+const ROWS = 9;
+let CELL = Math.floor(Math.min(window.innerWidth * 0.95, window.innerHeight * 0.60) / 9);
 
 // 0=corridoio, 1=muro, 2=calzino
 const MAP_TEMPLATE = [
-  [1,1,1,1,1,1,1,1,1,1,1,1,1],
-  [1,2,2,2,2,2,1,2,2,2,2,2,1],
-  [1,2,1,1,2,1,1,1,2,1,1,2,1],
-  [1,2,1,1,2,2,2,2,2,1,1,2,1],
-  [1,2,2,2,2,1,1,1,2,2,2,2,1],
-  [1,1,1,2,1,1,0,1,1,2,1,1,1],
-  [1,2,2,2,2,0,0,0,2,2,2,2,1],
-  [1,1,1,2,1,1,0,1,1,2,1,1,1],
-  [1,2,2,2,2,1,1,1,2,2,2,2,1],
-  [1,2,1,1,2,2,2,2,2,1,1,2,1],
-  [1,2,1,1,2,1,1,1,2,1,1,2,1],
-  [1,2,2,2,2,2,1,2,2,2,2,2,1],
-  [1,1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,2,2,2,1,2,2,2,1],
+  [1,2,1,2,2,2,1,2,1],
+  [1,2,2,2,1,2,2,2,1],
+  [1,1,2,1,0,1,2,1,1],
+  [1,2,2,2,1,2,2,2,1],
+  [1,2,1,2,2,2,1,2,1],
+  [1,2,2,2,1,2,2,2,1],
+  [1,1,1,1,1,1,1,1,1],
 ];
 
 const canvas = document.getElementById('canvas');
@@ -90,9 +86,9 @@ function initGame() {
   scoreEl.textContent = score;
   socksEl.textContent = totalSocks;
   // Pino parte in basso al centro
-  pino = { x: 6, y: 11, dx: 0, dy: 0, mouthOpen: false, tick: 0 };
-  // Teresa parte in alto a destra
-  teresa = { x: 9, y: 1, dx: 0, dy: 0, stuck: 0 };
+  pino = { x: 4, y: 7, dx: 0, dy: 0, mouthOpen: false, tick: 0 };
+  // Teresa parte in alto al centro
+  teresa = { x: 4, y: 1, dx: 0, dy: 0, stuck: 0 };
   dir = { dx: 0, dy: 0 };
   nextDir = { dx: 0, dy: 0 };
 }
