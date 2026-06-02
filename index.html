@@ -9,8 +9,9 @@
 body { background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Courier New', monospace; color: #fff; }
 #hud { font-size: 22px; margin-bottom: 10px; letter-spacing: 2px; }
 #canvas { border: 3px solid #00f; display: block; }
-#overlay { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
-#msg { font-size: 36px; font-weight: bold; text-align: center; text-shadow: 0 0 10px currentColor; }
+#overlay { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: rgba(0,0,0,0.88); border-radius: 14px; padding: 32px 40px; }
+#overlay-img { width: 250px; height: 250px; object-fit: contain; display: none; }
+#msg { font-size: 42px; font-weight: bold; text-align: center; letter-spacing: 3px; text-shadow: 0 0 12px currentColor; }
 #startBtn {
   font-size: 22px; padding: 14px 40px; background: #00f; color: #fff;
   border: none; border-radius: 8px; cursor: pointer; letter-spacing: 2px;
@@ -26,6 +27,7 @@ body { background: #000; display: flex; flex-direction: column; align-items: cen
 <div id="wrap">
   <canvas id="canvas"></canvas>
   <div id="overlay">
+    <img id="overlay-img" src="" alt="">
     <div id="msg">👟 SALVA PINO! 👟</div>
     <button id="startBtn">▶ INIZIA</button>
   </div>
@@ -245,19 +247,27 @@ function gameLoop(ts) {
 
   if (checkCollision()) {
     gameRunning = false;
-    showOverlay('😱 Teresa ti ha preso!', '#ff4444', 'RIPROVA');
+    showOverlay('teresa.png', 'HAI PERSO!', '#ff4444', 'RIPROVA');
     return;
   }
   if (totalSocks === 0) {
     gameRunning = false;
-    showOverlay('🎉 Hai salvato tutti i calzini!', '#44ff44', 'ANCORA');
+    showOverlay('pino-aperta.png', 'HAI VINTO!', '#44ff44', 'ANCORA');
     return;
   }
 
   animFrame = requestAnimationFrame(gameLoop);
 }
 
-function showOverlay(text, color, btnText) {
+const overlayImg = document.getElementById('overlay-img');
+
+function showOverlay(imgSrc, text, color, btnText) {
+  if (imgSrc) {
+    overlayImg.src = imgSrc;
+    overlayImg.style.display = 'block';
+  } else {
+    overlayImg.style.display = 'none';
+  }
   msg.textContent = text;
   msg.style.color = color;
   startBtn.textContent = '▶ ' + btnText;
