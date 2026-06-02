@@ -19,7 +19,11 @@ body { background: #000; display: flex; flex-direction: column; align-items: cen
 }
 #startBtn:hover { background: #33f; }
 #wrap { position: relative; display: flex; align-items: center; justify-content: center; }
-#joystick-wrap { display: flex; justify-content: center; padding: 14px 0 6px; touch-action: none; user-select: none; }
+#dpad { display: none; flex-direction: column; align-items: center; gap: 6px; padding: 14px 0 6px; touch-action: none; user-select: none; }
+.dpad-row { display: flex; gap: 6px; }
+.dpad-btn { width: 75px; height: 75px; background: rgba(50,50,50,0.75); border: 2px solid rgba(255,255,255,0.3); border-radius: 14px; color: #fff; font-size: 30px; cursor: pointer; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+.dpad-btn:active { background: rgba(0,0,200,0.7); }
+.dpad-space { width: 75px; height: 75px; }
 </style>
 </head>
 <body>
@@ -32,8 +36,17 @@ body { background: #000; display: flex; flex-direction: column; align-items: cen
     <button id="startBtn">▶ INIZIA</button>
   </div>
 </div>
-<div id="joystick-wrap">
-  <canvas id="jc" width="160" height="160"></canvas>
+<div id="dpad">
+  <div class="dpad-row">
+    <div class="dpad-space"></div>
+    <button class="dpad-btn" id="btn-up">▲</button>
+    <div class="dpad-space"></div>
+  </div>
+  <div class="dpad-row">
+    <button class="dpad-btn" id="btn-left">◀</button>
+    <button class="dpad-btn" id="btn-down">▼</button>
+    <button class="dpad-btn" id="btn-right">▶</button>
+  </div>
 </div>
 
 <script>
@@ -294,75 +307,22 @@ window.addEventListener('keydown', function(e) {
   }
 });
 
-// JOYSTICK FISSO SOTTO IL CANVAS
-const joyCanvas = document.getElementById('jc');
-const joyCtx    = joyCanvas.getContext('2d');
-const JR = 70, JIR = 28, JCX = 80, JCY = 80;
-let joyPos    = {x: JCX, y: JCY};
-let joyActive = false;
+// TASTI FRECCIA TOUCH
+const isTouch = navigator.maxTouchPoints > 0;
+if (isTouch) document.getElementById('dpad').style.display = 'flex';
 
-function drawJoystick() {
-  joyCtx.clearRect(0, 0, 160, 160);
-  joyCtx.beginPath();
-  joyCtx.arc(JCX, JCY, JR, 0, Math.PI * 2);
-  joyCtx.fillStyle   = 'rgba(120,120,120,0.35)';
-  joyCtx.fill();
-  joyCtx.strokeStyle = 'rgba(255,255,255,0.5)';
-  joyCtx.lineWidth   = 3;
-  joyCtx.stroke();
-  joyCtx.beginPath();
-  joyCtx.arc(joyPos.x, joyPos.y, JIR, 0, Math.PI * 2);
-  joyCtx.fillStyle   = '#00f';
-  joyCtx.fill();
-  joyCtx.strokeStyle = 'rgba(255,255,255,0.6)';
-  joyCtx.lineWidth   = 2;
-  joyCtx.stroke();
-}
-
-function applyJoy(clientX, clientY) {
-  const rect  = joyCanvas.getBoundingClientRect();
-  const dx    = clientX - (rect.left + JCX);
-  const dy    = clientY - (rect.top  + JCY);
-  const dist  = Math.hypot(dx, dy);
-  const clamp = Math.min(dist, JR);
-  const angle = Math.atan2(dy, dx);
-  joyPos.x = JCX + Math.cos(angle) * clamp;
-  joyPos.y = JCY + Math.sin(angle) * clamp;
-  if (dist > 18) {
-    const deg = angle * 180 / Math.PI;
-    if      (deg > -45  && deg <=  45) nextDir = {dx: 1,  dy: 0};
-    else if (deg >  45  && deg <= 135) nextDir = {dx: 0,  dy: 1};
-    else if (deg >  135 || deg <= -135) nextDir = {dx:-1,  dy: 0};
-    else                               nextDir = {dx: 0,  dy:-1};
-  }
-  drawJoystick();
-}
-
-document.addEventListener('touchstart', function(e) {
-  const rect = joyCanvas.getBoundingClientRect();
-  const t    = e.touches[0];
-  if (Math.hypot(t.clientX - (rect.left + JCX), t.clientY - (rect.top + JCY)) <= JR + 20) {
-    joyActive = true;
-    applyJoy(t.clientX, t.clientY);
+function setupBtn(id, dx, dy) {
+  const btn = document.getElementById(id);
+  btn.addEventListener('touchstart', function(e) {
     e.preventDefault();
-  }
-}, {passive: false});
+    if (gameRunning) nextDir = {dx: dx, dy: dy};
+  }, {passive: false});
+}
 
-document.addEventListener('touchmove', function(e) {
-  if (!joyActive) return;
-  e.preventDefault();
-  applyJoy(e.touches[0].clientX, e.touches[0].clientY);
-}, {passive: false});
-
-document.addEventListener('touchend', function(e) {
-  if (!joyActive) return;
-  e.preventDefault();
-  joyActive = false;
-  joyPos    = {x: JCX, y: JCY};
-  drawJoystick();
-}, {passive: false});
-
-drawJoystick();
+setupBtn('btn-up',    0, -1);
+setupBtn('btn-down',  0,  1);
+setupBtn('btn-left', -1,  0);
+setupBtn('btn-right', 1,  0);
 
 function resizeCanvas() {
   CELL = Math.min(48, Math.floor(Math.min(window.innerWidth, window.innerHeight * 0.85) / COLS));
